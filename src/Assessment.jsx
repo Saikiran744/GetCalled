@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom';
 import { C, FONTS, FONT_IMPORT_URL, statusForScore, colorForStatus } from './theme';
 import { DIMENSIONS, PLAN_COPY, scoreDimension } from './assessmentData';
 
-// TODO(saikiran): replace with your real WhatsApp business number, country code
-// first, no + or spaces — e.g. '91XXXXXXXXXX'.
+// Your real WhatsApp Business number, country code first — the code below
+// strips any + or spaces automatically, so either format works here.
 const FOUNDER_WHATSAPP = '+91 8767451420';
 
 // ─── Small shared bits ──────────────────────────────────────────────────────
@@ -211,7 +211,7 @@ function CaptureForm({ ranked }) {
       `Weakest areas: ${weakest}`,
       `Can I get my full plan + a free drill session?`,
     ].filter(Boolean);
-    return `https://wa.me/${FOUNDER_WHATSAPP}?text=${encodeURIComponent(lines.join('\n'))}`;
+    return `https://wa.me/${FOUNDER_WHATSAPP.replace(/\D/g, '')}?text=${encodeURIComponent(lines.join('\n'))}`;
   };
 
   return (
