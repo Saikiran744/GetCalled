@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { C } from './theme';
 
 // ─── Content (mirrors virtual:content home data) ───────────────────────────
 
@@ -14,7 +16,7 @@ const home = {
     headlineAccent: 'like someone else.',
     subhead:
       "GetCalled runs a 5-part diagnostic on your actual skill gaps — DSA, Core CS, Programming, Communication, Projects — before it builds your prep plan. Not the same 30-day PDF already circulating in your batch's WhatsApp group.",
-    ctaPrimary: 'Join the waitlist',
+    ctaPrimary: 'Take the free skill scan',
     ctaSecondary: 'See how it works',
     terminalCmd: '$ getcalled scan --profile=fresher',
     terminalNote:
@@ -54,6 +56,7 @@ const PIPELINE_STEPS = [
   {
     cmd: '$ getcalled init',
     desc: 'Take the 5-part skill scan — ten minutes, tells you exactly where you stand.',
+    to: '/assessment',
   },
   {
     cmd: '$ getcalled plan',
@@ -68,21 +71,6 @@ const PIPELINE_STEPS = [
     desc: "Walk in ready. No more guessing what the interviewer's about to ask.",
   },
 ];
-
-// ─── Colours (exact spec) ───────────────────────────────────────────────────
-
-const C = {
-  bg: '#0B0D12',
-  surface: '#13161F',
-  border: '#242938',
-  barBg: '#20242F',
-  text: '#E7E9EE',
-  muted: '#7C8493',
-  blue: '#5B8DEF',
-  amber: '#E8A33D',
-  green: '#4FBF83',
-  red: '#E5484D',
-};
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
@@ -265,17 +253,22 @@ function TerminalPanel({ animate }) {
 
 function PipelineCard({ step }) {
   const [hovered, setHovered] = useState(false);
+  const Wrapper = step.to ? Link : 'div';
+  const wrapperProps = step.to ? { to: step.to } : {};
   return (
-    <div
+    <Wrapper
+      {...wrapperProps}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
+        display: 'block',
         background: C.surface,
         border: `1px solid ${hovered ? C.blue : C.border}`,
         borderRadius: '6px',
         padding: 'clamp(14px, 4vw, 20px)',
         transition: 'border-color 150ms ease',
-        cursor: 'default',
+        cursor: step.to ? 'pointer' : 'default',
+        textDecoration: 'none',
       }}
     >
       <div style={{ fontFamily: 'var(--font-heading)', fontSize: '0.82rem', color: C.blue, marginBottom: '10px', fontWeight: 500 }}>
@@ -285,7 +278,7 @@ function PipelineCard({ step }) {
       <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.875rem', color: C.muted, lineHeight: 1.6, margin: 0 }}>
         {step.desc}
       </p>
-    </div>
+    </Wrapper>
   );
 }
 
@@ -382,16 +375,14 @@ export default function HomePage() {
         </p>
         <div style={{ marginBottom: 'clamp(32px, 6vw, 64px)' }}>
           <div className="flex flex-col gap-3 sm:flex-row" style={{ maxWidth: '360px' }}>
-            <a
-              href="https://form.jotform.com/262063645785061"
-              target="_blank"
-              rel="noopener noreferrer"
+            <Link
+              to="/assessment"
               style={{ fontFamily: 'var(--font-heading)', fontSize: '0.85rem', fontWeight: 500, background: C.blue, color: C.bg, border: 'none', borderRadius: '5px', padding: '0 20px', height: '46px', cursor: 'pointer', letterSpacing: '0.01em', transition: 'opacity 150ms ease', width: '100%', flexShrink: 0, touchAction: 'manipulation', display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', boxSizing: 'border-box' }}
               onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.85')}
               onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
             >
               {home.hero.ctaPrimary}
-            </a>
+            </Link>
             <button
               onClick={() => scrollTo('how-it-runs')}
               style={{ fontFamily: 'var(--font-heading)', fontSize: '0.85rem', fontWeight: 500, background: 'transparent', color: C.muted, border: `1px solid ${C.border}`, borderRadius: '5px', padding: '0 20px', height: '46px', cursor: 'pointer', letterSpacing: '0.01em', transition: 'border-color 150ms ease, color 150ms ease', width: '100%', flexShrink: 0, touchAction: 'manipulation' }}
