@@ -1,11 +1,24 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { C, FONTS, FONT_IMPORT_URL, statusForScore, colorForStatus } from './theme';
 import { DIMENSIONS, PLAN_COPY, scoreDimension } from './assessmentData';
+import { buildScoreCardBlob } from './scoreCard';
 
 // Your real WhatsApp Business number, country code first — the code below
 // strips any + or spaces automatically, so either format works here.
 const FOUNDER_WHATSAPP = '+91 8767451420';
+
+// Fires a GA4 event (and a matching Meta Pixel custom event, once you add
+// your real Pixel ID in index.html) if the respective script is loaded —
+// safe no-op otherwise, e.g. in local dev or if a browser blocks trackers.
+function track(eventName, params = {}) {
+  if (typeof window !== 'undefined' && typeof window.gtag === 'function') {
+    window.gtag('event', eventName, params);
+  }
+  if (typeof window !== 'undefined' && typeof window.fbq === 'function') {
+    window.fbq('trackCustom', eventName, params);
+  }
+}
 
 // ─── Small shared bits ──────────────────────────────────────────────────────
 
@@ -242,7 +255,11 @@ function CaptureForm({ ranked }) {
         href={buildWhatsAppLink()}
         target="_blank"
         rel="noopener noreferrer"
-        onClick={() => setSent(true)}
+        onClick={() => {
+          track('whatsapp_cta_click', { weakest_dimension: ranked[0]?.dimension.id, weakest_pct: ranked[0]?.pct });
+          if (typeof window.fbq === 'function') window.fbq('track', 'Lead');
+          setSent(true);
+        }}
         style={{
           display: 'block', width: '100%', boxSizing: 'border-box', textAlign: 'center', textDecoration: 'none',
           fontFamily: 'var(--font-heading)', fontSize: '0.85rem', fontWeight: 500,
@@ -258,6 +275,132 @@ function CaptureForm({ ranked }) {
           Opening WhatsApp — send the message and we'll get back to you.
         </p>
       )}
+    </div>
+  );
+}
+
+// ─── Share section ──────────────────────────────────────────────────────────
+
+function IconButton({ onClick, href, label, children }) {
+  const style = {
+    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px',
+    flex: 1, textDecoration: 'none', cursor: 'pointer', background: 'none', border: 'none', padding: 0,
+  };
+  const circle = {
+    width: '44px', height: '44px', borderRadius: '50%', border: `1px solid ${C.border}`,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.text,
+    transition: 'border-color 150ms ease',
+  };
+  const text = { fontFamily: 'var(--font-sans)', fontSize: '0.68rem', color: C.muted };
+  const inner = (
+    <>
+      <span style={circle}>{children}</span>
+      <span style={text}>{label}</span>
+    </>
+  );
+  return href ? (
+    <a href={href} target="_blank" rel="noopener noreferrer" onClick={onClick} style={style}>
+      {inner}
+    </a>
+  ) : (
+    <button onClick={onClick} style={style}>
+      {inner}
+    </button>
+  );
+}
+
+function ShareSection({ ranked }) {
+  const [busy, setBusy] = useState(false);
+  const overall = Math.round(ranked.reduce((s, r) => s + r.pct, 0) / ranked.length);
+  const shareText = `I just scored ${overall}% on the getcalled placement readiness scan. Weakest area: ${ranked[0].dimension.label} (${ranked[0].pct}%). Check yours free, takes 10 min: https://getcalled.in/assessment`;
+
+  const downloadBlob = (blob) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'getcalled-score.png';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownload = async () => {
+    track('share_image_download');
+    setBusy(true);
+    try {
+      const blob = await buildScoreCardBlob(ranked);
+      downloadBlob(blob);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleNativeShare = async () => {
+    track('share_native_click');
+    setBusy(true);
+    try {
+      const blob = await buildScoreCardBlob(ranked);
+      const file = new File([blob], 'getcalled-score.png', { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'My getcalled readiness scan', text: shareText });
+      } else if (navigator.share) {
+        await navigator.share({ title: 'My getcalled readiness scan', text: shareText, url: 'https://getcalled.in/assessment' });
+      } else {
+        downloadBlob(blob);
+      }
+    } catch {
+      // share sheet cancelled or unsupported — nothing to surface to the user
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+  const linkedinUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent('https://getcalled.in/assessment')}`;
+
+  return (
+    <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '8px', padding: 'clamp(16px, 4vw, 24px)', marginTop: '20px' }}>
+      <p style={{ fontFamily: 'var(--font-heading)', fontSize: '0.85rem', color: C.text, margin: '0 0 4px', fontWeight: 500 }}>
+        Share your results
+      </p>
+      <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.8rem', color: C.muted, lineHeight: 1.5, margin: '0 0 16px' }}>
+        Post your score card, or challenge a friend to see where they stand.
+      </p>
+
+      <button
+        onClick={handleNativeShare}
+        disabled={busy}
+        style={{
+          fontFamily: 'var(--font-heading)', fontSize: '0.82rem', fontWeight: 500,
+          background: C.blue, color: C.bg, border: 'none', borderRadius: '5px',
+          padding: '12px 16px', width: '100%', cursor: busy ? 'default' : 'pointer',
+          opacity: busy ? 0.7 : 1, marginBottom: '16px', letterSpacing: '0.01em',
+        }}
+      >
+        {busy ? 'Preparing your card…' : 'Share my scorecard'}
+      </button>
+
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <IconButton href={whatsappUrl} label="WhatsApp" onClick={() => track('share_whatsapp_click')}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path d="M20.5 3.5A10.4 10.4 0 0 0 12.1 0.6 10.5 10.5 0 0 0 2.7 15.9L1 21.4l5.7-1.5a10.4 10.4 0 0 0 5 1.3 10.5 10.5 0 0 0 10.4-10.5c0-2.8-1.1-5.4-3.1-7.4z" strokeLinejoin="round" />
+            <path d="M8.4 7.2c.2-.5.4-.5.7-.5h.5c.2 0 .4 0 .6.4.2.5.7 1.7.7 1.8.1.1.1.3 0 .4-.1.2-.1.3-.3.4-.1.2-.3.3-.4.5-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.5 1.5.3.1.5.1.6-.1.2-.2.7-.8.9-1.1.2-.3.4-.2.6-.1.2.1 1.6.7 1.8.9.2.1.4.2.4.3.1.4.1.8-.1 1.2-.2.5-1.1 1-1.6 1.1-.4.1-.9.1-1.5-.1a12 12 0 0 1-5-3.5 12 12 0 0 1-2-3.9c-.2-.8 0-1.4.4-1.9z" fill="currentColor" stroke="none" />
+          </svg>
+        </IconButton>
+        <IconButton href={linkedinUrl} label="LinkedIn" onClick={() => track('share_linkedin_click')}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <path d="M7.5 10v6.5M7.5 7.2v.1M12 16.5v-4c0-1.4.9-2.5 2.3-2.5s2.2 1 2.2 2.5v4" strokeLinecap="round" />
+          </svg>
+        </IconButton>
+        <IconButton onClick={handleDownload} label="Download">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path d="M12 3v12m0 0-4-4m4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </IconButton>
+      </div>
     </div>
   );
 }
@@ -294,6 +437,8 @@ function ResultsScreen({ scores, onRestart }) {
           ))}
         </div>
       </div>
+
+      <ShareSection ranked={ranked} />
 
       <div
         style={{
@@ -334,15 +479,27 @@ export default function Assessment() {
   const totalSteps = DIMENSIONS.length;
   const currentDimension = DIMENSIONS[stepIndex];
 
+  useEffect(() => {
+    track('assessment_started');
+  }, []);
+
   const handleAnswer = (questionId, points) => {
     setAnswers((prev) => ({ ...prev, [questionId]: points }));
   };
 
   const handleNext = () => {
     if (stepIndex < totalSteps - 1) {
+      track('assessment_module_completed', { module: currentDimension.id, module_index: stepIndex + 1 });
       setStepIndex((i) => i + 1);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
+      const finalScores = DIMENSIONS.map((d) => ({ id: d.id, pct: scoreDimension(answers, d) }));
+      const weakest = [...finalScores].sort((a, b) => a.pct - b.pct)[0];
+      track('assessment_completed', {
+        weakest_dimension: weakest.id,
+        weakest_pct: weakest.pct,
+        avg_pct: Math.round(finalScores.reduce((s, x) => s + x.pct, 0) / finalScores.length),
+      });
       setFinished(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
